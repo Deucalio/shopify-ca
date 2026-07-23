@@ -6,16 +6,19 @@ import {
   InlineStack,
   Button,
   Modal,
-  Badge,
   Box,
-  Banner
+  Banner,
+  Popover,
+  ActionList
 } from "@shopify/polaris";
 import { useSubmit } from "react-router";
+import { exportSegmentCsv } from "../utils/csvExport";
+import SegmentGridVisualization from "./SegmentGridVisualization";
 
-function formatCurrency(val) {
+function formatCurrency(val, currencyCode = "USD") {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
+    currency: currencyCode || "USD",
     maximumFractionDigits: 2
   }).format(val || 0);
 }
@@ -29,16 +32,24 @@ function formatAvgOrders(val) {
 export default function SegmentsTable({ summaries = [] }) {
   const submit = useSubmit();
   const [selectedTip, setSelectedTip] = useState(null);
-  const [selectedAction, setSelectedAction] = useState(null);
+  const [activePopoverKey, setActivePopoverKey] = useState(null);
   const [actionSuccess, setActionSuccess] = useState("");
 
-  const handleApplyTagging = (segmentKey) => {
+  const handleApplyTag = (row) => {
+    const tagName = `loyal-app_${row.segmentKey}`;
     const formData = new FormData();
     formData.append("actionType", "tag_segment");
-    formData.append("segmentKey", segmentKey);
+    formData.append("segmentKey", row.segmentKey);
+    formData.append("tagName", tagName);
     submit(formData, { method: "post" });
-    setActionSuccess(`Queued customer tagging for segment: ${selectedAction?.name}`);
-    setSelectedAction(null);
+    setActionSuccess(`Added tag "${tagName}" to customers in segment: ${row.name}`);
+    setActivePopoverKey(null);
+  };
+
+  const handleDownloadCsv = (row, format) => {
+    exportSegmentCsv(row.name, row.customerList || [], format);
+    setActionSuccess(`Downloaded ${format.toUpperCase()} CSV for segment: ${row.name}`);
+    setActivePopoverKey(null);
   };
 
   return (
@@ -93,115 +104,157 @@ export default function SegmentsTable({ summaries = [] }) {
               <th style={{ padding: "14px 12px", textAlign: "right" }}>Days Between Orders</th>
               <th style={{ padding: "14px 12px", textAlign: "right" }}>Avg. Order Value</th>
               <th style={{ padding: "14px 12px", textAlign: "right" }}>Total Sales</th>
-              <th style={{ padding: "14px 16px", textAlign: "right", minWidth: "160px" }}>Growth & Actions</th>
+              <th style={{ padding: "14px 16px", textAlign: "right", minWidth: "170px" }}>Growth & Actions</th>
             </tr>
           </thead>
           <tbody>
-            {summaries.map((row) => (
-              <tr
-                key={row.segmentKey}
-                style={{
-                  borderBottom: "1px solid #e1e3e5",
-                  transition: "background-color 0.15s ease"
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f9fafb")}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
-              >
-                {/* 1. Segment Name */}
-                <td style={{ padding: "14px 16px" }}>
-                  <InlineStack gap="200" blockAlign="center" wrap={false}>
-                    <span
-                      style={{
-                        width: "12px",
-                        height: "12px",
-                        borderRadius: "50%",
-                        backgroundColor: row.color,
-                        flexShrink: 0
-                      }}
-                    />
-                    <BlockStack gap="050">
-                      <Text as="span" variant="bodyMd" fontWeight="bold">
-                        {row.name}
-                      </Text>
-                      <Text as="span" variant="bodyXs" tone="subdued">
-                        {row.subtitle}
-                      </Text>
-                    </BlockStack>
-                  </InlineStack>
-                </td>
+            {summaries.map((row) => {
+              const isPopoverOpen = activePopoverKey === row.segmentKey;
+              const currencyCode = row.currencyCode || "USD";
 
-                {/* 2. Customers count */}
-                <td style={{ padding: "14px 12px", textAlign: "right" }}>
-                  <Text as="span" variant="bodyMd" fontWeight="semibold">
-                    {row.customerCount.toLocaleString()}
-                  </Text>
-                </td>
+              return (
+                <tr
+                  key={row.segmentKey}
+                  style={{
+                    borderBottom: "1px solid #e1e3e5",
+                    transition: "background-color 0.15s ease"
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f9fafb")}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                >
+                  {/* 1. Segment Name */}
+                  <td style={{ padding: "14px 16px" }}>
+                    <InlineStack gap="200" blockAlign="center" wrap={false}>
+                      <span
+                        style={{
+                          width: "12px",
+                          height: "12px",
+                          borderRadius: "50%",
+                          backgroundColor: row.color,
+                          flexShrink: 0
+                        }}
+                      />
+                      <BlockStack gap="050">
+                        <Text as="span" variant="bodyMd" fontWeight="bold">
+                          {row.name}
+                        </Text>
+                        <Text as="span" variant="bodyXs" tone="subdued">
+                          {row.subtitle}
+                        </Text>
+                      </BlockStack>
+                    </InlineStack>
+                  </td>
 
-                {/* 3. Customer value */}
-                <td style={{ padding: "14px 12px", textAlign: "right" }}>
-                  <Text as="span" variant="bodyMd">
-                    {formatCurrency(row.customerValue)}
-                  </Text>
-                </td>
+                  {/* 2. Customers count */}
+                  <td style={{ padding: "14px 12px", textAlign: "right" }}>
+                    <Text as="span" variant="bodyMd" fontWeight="semibold">
+                      {row.customerCount.toLocaleString()}
+                    </Text>
+                  </td>
 
-                {/* 4. Avg. orders */}
-                <td style={{ padding: "14px 12px", textAlign: "right" }}>
-                  <Text as="span" variant="bodyMd">
-                    {formatAvgOrders(row.avgOrders)}
-                  </Text>
-                </td>
+                  {/* 3. Customer value */}
+                  <td style={{ padding: "14px 12px", textAlign: "right" }}>
+                    <Text as="span" variant="bodyMd">
+                      {formatCurrency(row.customerValue, currencyCode)}
+                    </Text>
+                  </td>
 
-                {/* 5. Days between orders */}
-                <td style={{ padding: "14px 12px", textAlign: "right" }}>
-                  <Text as="span" variant="bodyMd">
-                    {row.daysBetweenOrders > 0 ? `${row.daysBetweenOrders} days` : "-"}
-                  </Text>
-                </td>
+                  {/* 4. Avg. orders */}
+                  <td style={{ padding: "14px 12px", textAlign: "right" }}>
+                    <Text as="span" variant="bodyMd">
+                      {formatAvgOrders(row.avgOrders)}
+                    </Text>
+                  </td>
 
-                {/* 6. Avg. order value */}
-                <td style={{ padding: "14px 12px", textAlign: "right" }}>
-                  <Text as="span" variant="bodyMd">
-                    {formatCurrency(row.avgOrderValue)}
-                  </Text>
-                </td>
+                  {/* 5. Days between orders */}
+                  <td style={{ padding: "14px 12px", textAlign: "right" }}>
+                    <Text as="span" variant="bodyMd">
+                      {row.daysBetweenOrders > 0 ? `${row.daysBetweenOrders} days` : "-"}
+                    </Text>
+                  </td>
 
-                {/* 7. Total sales */}
-                <td style={{ padding: "14px 12px", textAlign: "right" }}>
-                  <Text as="span" variant="bodyMd" fontWeight="semibold">
-                    {formatCurrency(row.totalSales)}
-                  </Text>
-                </td>
+                  {/* 6. Avg. order value */}
+                  <td style={{ padding: "14px 12px", textAlign: "right" }}>
+                    <Text as="span" variant="bodyMd">
+                      {formatCurrency(row.avgOrderValue, currencyCode)}
+                    </Text>
+                  </td>
 
-                {/* 8. Growth & Actions Buttons */}
-                <td style={{ padding: "14px 16px", textAlign: "right" }}>
-                  <InlineStack gap="150" wrap={false} align="end">
-                    <Button
-                      size="slim"
-                      onClick={() => setSelectedTip(row)}
-                    >
-                      Tips
-                    </Button>
-                    <Button
-                      size="slim"
-                      variant="primary"
-                      onClick={() => setSelectedAction(row)}
-                    >
-                      Actions
-                    </Button>
-                  </InlineStack>
-                </td>
-              </tr>
-            ))}
+                  {/* 7. Total sales */}
+                  <td style={{ padding: "14px 12px", textAlign: "right" }}>
+                    <Text as="span" variant="bodyMd" fontWeight="semibold">
+                      {formatCurrency(row.totalSales, currencyCode)}
+                    </Text>
+                  </td>
+
+                  {/* 8. Actions & Growth Menu */}
+                  <td style={{ padding: "14px 16px", textAlign: "right" }}>
+                    <InlineStack gap="150" wrap={false} align="end">
+                      <Button
+                        size="slim"
+                        onClick={() => setSelectedTip(row)}
+                      >
+                        Tips
+                      </Button>
+
+                      {/* Green Actions Dropdown Popover */}
+                      <Popover
+                        active={isPopoverOpen}
+                        activator={
+                          <Button
+                            size="slim"
+                            variant="primary"
+                            disclosure
+                            onClick={() =>
+                              setActivePopoverKey(isPopoverOpen ? null : row.segmentKey)
+                            }
+                          >
+                            Actions
+                          </Button>
+                        }
+                        onClose={() => setActivePopoverKey(null)}
+                      >
+                        <ActionList
+                          actionRole="menuitem"
+                          items={[
+                            {
+                              content: `Add tag "loyal-app_${row.segmentKey}"`,
+                              onAction: () => handleApplyTag(row)
+                            },
+                            {
+                              content: "Download CSV (plain)",
+                              onAction: () => handleDownloadCsv(row, "plain")
+                            },
+                            {
+                              content: "Download CSV (Google Ads)",
+                              onAction: () => handleDownloadCsv(row, "google")
+                            },
+                            {
+                              content: "Download CSV (Facebook)",
+                              onAction: () => handleDownloadCsv(row, "facebook")
+                            },
+                            {
+                              content: "Download CSV (Klaviyo)",
+                              onAction: () => handleDownloadCsv(row, "klaviyo")
+                            }
+                          ]}
+                        />
+                      </Popover>
+                    </InlineStack>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
-      {/* Tips Modal */}
+      {/* Redesigned Tips Modal matching Screenshots */}
       {selectedTip && (
         <Modal
           open={Boolean(selectedTip)}
           onClose={() => setSelectedTip(null)}
-          title={`Growth Strategy Tips: ${selectedTip.name}`}
+          title={selectedTip.title || `${selectedTip.name} Customers`}
           primaryAction={{
             content: "Close",
             onClick: () => setSelectedTip(null)
@@ -209,45 +262,46 @@ export default function SegmentsTable({ summaries = [] }) {
         >
           <Modal.Section>
             <BlockStack gap="400">
-              <InlineStack gap="200" blockAlign="center">
-                <Badge tone="info">{selectedTip.subtitle}</Badge>
-                <Text as="span" variant="bodySm" tone="subdued">
-                  ({selectedTip.customerCount} customers)
-                </Text>
-              </InlineStack>
+              {/* Detailed Lead Text */}
               <Text as="p" variant="bodyMd">
-                {selectedTip.tip}
+                <strong>{selectedTip.lead}</strong>
               </Text>
-            </BlockStack>
-          </Modal.Section>
-        </Modal>
-      )}
 
-      {/* Actions Modal */}
-      {selectedAction && (
-        <Modal
-          open={Boolean(selectedAction)}
-          onClose={() => setSelectedAction(null)}
-          title={`Segment Action: ${selectedAction.name}`}
-          primaryAction={{
-            content: `Apply "${selectedAction.name}" Customer Tags`,
-            onClick: () => handleApplyTagging(selectedAction.segmentKey)
-          }}
-          secondaryActions={[
-            {
-              content: "Cancel",
-              onClick: () => setSelectedAction(null)
-            }
-          ]}
-        >
-          <Modal.Section>
-            <BlockStack gap="300">
+              {/* Detailed Body Explanation */}
               <Text as="p" variant="bodyMd">
-                Apply tag <strong>VIP-{selectedAction.name.replace(/\s+/g, "")}</strong> to all {selectedAction.customerCount} customers in this segment in your Shopify Admin.
+                {selectedTip.body}
               </Text>
+
               <Text as="p" variant="bodySm" tone="subdued">
-                Tagged customers can be used for targeted marketing campaigns, Shopify Flow automations, and custom customer group discounts.
+                Learn more about how we segment{" "}
+                <a
+                  href="#segment-info"
+                  onClick={(e) => e.preventDefault()}
+                  style={{ color: "#2c6ecb", textDecoration: "underline" }}
+                >
+                  customers
+                </a>
+                .
               </Text>
+
+              {/* Recommended Actions & Tactics */}
+              {selectedTip.tactics && selectedTip.tactics.length > 0 && (
+                <BlockStack gap="200">
+                  <Text as="h3" variant="headingSm" fontWeight="bold">
+                    Recommended actions and tactics
+                  </Text>
+                  <ul style={{ paddingLeft: "20px", margin: 0 }}>
+                    {selectedTip.tactics.map((tactic, i) => (
+                      <li key={i} style={{ marginBottom: "6px", fontSize: "14px" }}>
+                        {tactic}
+                      </li>
+                    ))}
+                  </ul>
+                </BlockStack>
+              )}
+
+              {/* 5x5 RFM Matrix Grid Visualization */}
+              <SegmentGridVisualization activeSegmentKey={selectedTip.segmentKey} />
             </BlockStack>
           </Modal.Section>
         </Modal>

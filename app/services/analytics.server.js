@@ -3,6 +3,9 @@ import { computeRfmAnalytics } from "./rfm.server";
 
 const GET_CUSTOMERS_QUERY = `#graphql
   query getStoreCustomers($first: Int!, $after: String) {
+    shop {
+      currencyCode
+    }
     customers(first: $first, after: $after) {
       pageInfo {
         hasNextPage
@@ -39,16 +42,17 @@ const GET_CUSTOMERS_QUERY = `#graphql
 `;
 
 /**
- * Fetches customers from Shopify GraphQL Admin API across pages (up to max 1000 customers).
+ * Fetches customers and shop currency from Shopify GraphQL Admin API across pages.
  * 
  * @param {Object} admin Shopify Admin GraphQL client
- * @returns {Array} List of raw customer nodes
+ * @returns {Object} { rawCustomers, currencyCode }
  */
 export async function fetchShopifyCustomers(admin) {
   let allCustomers = [];
   let hasNextPage = true;
   let cursor = null;
-  let maxPages = 4; // Fetch up to 1000 customers (4 x 250) for fast performance
+  let maxPages = 4;
+  let currencyCode = "USD";
 
   while (hasNextPage && maxPages > 0) {
     maxPages--;
@@ -60,6 +64,10 @@ export async function fetchShopifyCustomers(admin) {
     });
 
     const json = await response.json();
+    if (json?.data?.shop?.currencyCode) {
+      currencyCode = json.data.shop.currencyCode;
+    }
+
     const data = json?.data?.customers;
     if (!data || !data.nodes) {
       break;
@@ -70,7 +78,7 @@ export async function fetchShopifyCustomers(admin) {
     cursor = data.pageInfo?.endCursor;
   }
 
-  return allCustomers;
+  return { rawCustomers: allCustomers, currencyCode };
 }
 
 /**
@@ -100,6 +108,7 @@ export async function getOrFetchAnalytics(admin, shop, forceRefresh = false) {
     });
 
     if (existingSnapshot && existingSnapshot.segmentData && (existingSnapshot.avgOrdersPerCustomer < 100)) {
+      const storedCurrency = existingSnapshot.segmentData.currencyCode || "USD";
       return {
         kpis: {
           totalCustomers: existingSnapshot.totalCustomers,
@@ -120,19 +129,21 @@ export async function getOrFetchAnalytics(admin, shop, forceRefresh = false) {
           daysBetweenOrders: existingSnapshot.daysBetweenOrders,
           avgOrderValue: existingSnapshot.avgOrderValue,
           firstTimeAov: existingSnapshot.firstTimeAov,
-          returningAov: existingSnapshot.returningAov
+          returningAov: existingSnapshot.returningAov,
+          currencyCode: storedCurrency
         },
         scatterPoints: existingSnapshot.segmentData.scatterPoints || [],
         segmentSummaries: existingSnapshot.segmentData.segmentSummaries || [],
         totalCustomerCount: existingSnapshot.totalCustomers,
+        currencyCode: storedCurrency,
         cachedAt: existingSnapshot.createdAt
       };
     }
   }
 
   // Fetch fresh data from Shopify Admin API
-  const rawCustomers = await fetchShopifyCustomers(admin);
-  const analyticsResult = computeRfmAnalytics(rawCustomers);
+  const { rawCustomers, currencyCode } = await fetchShopifyCustomers(admin);
+  const analyticsResult = computeRfmAnalytics(rawCustomers, currencyCode);
 
   // Cache snapshot in PostgreSQL via Prisma
   try {
@@ -154,7 +165,8 @@ export async function getOrFetchAnalytics(admin, shop, forceRefresh = false) {
         returningAov: analyticsResult.kpis.returningAov,
         segmentData: {
           scatterPoints: analyticsResult.scatterPoints,
-          segmentSummaries: analyticsResult.segmentSummaries
+          segmentSummaries: analyticsResult.segmentSummaries,
+          currencyCode
         }
       }
     });
@@ -164,6 +176,7 @@ export async function getOrFetchAnalytics(admin, shop, forceRefresh = false) {
 
   return {
     ...analyticsResult,
+    currencyCode,
     cachedAt: new Date()
   };
 }

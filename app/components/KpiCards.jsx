@@ -1,9 +1,9 @@
 import { Card, Text, BlockStack, InlineGrid, Box } from "@shopify/polaris";
 
-function formatCurrency(amount) {
+function formatCurrency(amount, currencyCode = "USD") {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
+    currency: currencyCode || "USD",
     maximumFractionDigits: 2
   }).format(amount || 0);
 }
@@ -24,7 +24,8 @@ export default function KpiCards({ kpis }) {
     daysBetweenOrders = 0,
     avgOrderValue = 0,
     firstTimeAov = 0,
-    returningAov = 0
+    returningAov = 0,
+    currencyCode = "USD"
   } = kpis || {};
 
   return (
@@ -58,15 +59,15 @@ export default function KpiCards({ kpis }) {
             Customer value
           </Text>
           <Text as="p" variant="headingLg" fontWeight="bold">
-            {formatCurrency(totalCustomerValue)}
+            {formatCurrency(totalCustomerValue, currencyCode)}
           </Text>
           <Box paddingBlockStart="100">
             <BlockStack gap="050">
               <Text as="span" variant="bodyXs" tone="subdued">
-                First-time: {formatCurrency(firstTimeValue)}
+                First-time: {formatCurrency(firstTimeValue, currencyCode)}
               </Text>
               <Text as="span" variant="bodyXs" tone="subdued">
-                Returning: {formatCurrency(returningValue)}
+                Returning: {formatCurrency(returningValue, currencyCode)}
               </Text>
             </BlockStack>
           </Box>
@@ -119,15 +120,15 @@ export default function KpiCards({ kpis }) {
             Average order value
           </Text>
           <Text as="p" variant="headingLg" fontWeight="bold">
-            {formatCurrency(avgOrderValue)}
+            {formatCurrency(avgOrderValue, currencyCode)}
           </Text>
           <Box paddingBlockStart="100">
             <BlockStack gap="050">
               <Text as="span" variant="bodyXs" tone="subdued">
-                First-time: {formatCurrency(firstTimeAov)}
+                First-time: {formatCurrency(firstTimeAov, currencyCode)}
               </Text>
               <Text as="span" variant="bodyXs" tone="subdued">
-                Returning: {formatCurrency(returningAov)}
+                Returning: {formatCurrency(returningAov, currencyCode)}
               </Text>
             </BlockStack>
           </Box>
