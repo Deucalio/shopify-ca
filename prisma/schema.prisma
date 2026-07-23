@@ -27,3 +27,39 @@ model Session {
   refreshToken        String?
   refreshTokenExpires DateTime?
 }
+
+model AppSettings {
+  id                         String   @id @default(uuid())
+  shop                       String   @unique
+  autoRefresh                Boolean  @default(true)
+  autoTagging                Boolean  @default(false)
+  emailReporting             Boolean  @default(false)
+  reportEmails               String   @default("")
+  addSegmentsToCustomersPage Boolean  @default(true)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+}
+
+model CustomerSegmentSnapshot {
+  id                   String   @id @default(uuid())
+  shop                 String
+  snapshotDate         DateTime @default(now())
+  totalCustomers       Int
+  firstTimeCustomers   Int
+  returningCustomers   Int
+  totalCustomerValue   Float
+  firstTimeValue       Float
+  returningValue       Float
+  avgOrdersPerCustomer Float
+  firstTimeAvgOrders   Float
+  returningAvgOrders   Float
+  daysBetweenOrders    Int
+  avgOrderValue        Float
+  firstTimeAov         Float
+  returningAov         Float
+  segmentData          Json
+  createdAt            DateTime @default(now())
+
+  @@index([shop, snapshotDate])
+}
+
