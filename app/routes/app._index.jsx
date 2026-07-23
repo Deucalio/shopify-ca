@@ -56,6 +56,7 @@ export default function AppIndex() {
 
   return (
     <Page
+      fullWidth
       title="Customer Analytics: VIP & LTV"
       subtitle="Recency, Frequency & Monetary (RFM) Segmentation Dashboard"
       primaryAction={{

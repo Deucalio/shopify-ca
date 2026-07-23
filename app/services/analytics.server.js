@@ -99,7 +99,7 @@ export async function getOrFetchAnalytics(admin, shop, forceRefresh = false) {
       }
     });
 
-    if (existingSnapshot && existingSnapshot.segmentData) {
+    if (existingSnapshot && existingSnapshot.segmentData && (existingSnapshot.avgOrdersPerCustomer < 100)) {
       return {
         kpis: {
           totalCustomers: existingSnapshot.totalCustomers,

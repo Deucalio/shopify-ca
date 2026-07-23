@@ -27,6 +27,7 @@ export default function AnalyticsPage() {
 
   return (
     <Page
+      fullWidth
       title="Analytics"
       subtitle="Historical RFM Customer Segments & Retention Trends"
     >

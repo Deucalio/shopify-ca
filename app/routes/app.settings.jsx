@@ -96,6 +96,7 @@ export default function SettingsPage() {
 
   return (
     <Page
+      fullWidth
       title="Settings"
       subtitle="Configure automated refresh schedules, Shopify tagging, and email reports"
       primaryAction={{
